@@ -1,0 +1,36 @@
+name: face_detection_model
+description: "A new Flutter project."
+# The following line prevents the package from being accidentally published to
+# pub.dev using `flutter pub publish`. This is preferred for private packages.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Updated dependency for face mesh detection
+  google_mlkit_face_mesh_detection: 0.2.1
+  image_picker: ^0.8.4+4
+  camera: ^0.10.0+1
+  permission_handler: ^10.0.0+1
+  google_mlkit_commons: ^0.8.1
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^4.0.0
+
+flutter:
+  # Add the necklace image asset
+  assets:
+    - assets/necklace.png
+    - assets/earring.png
+
+  uses-material-design: true
