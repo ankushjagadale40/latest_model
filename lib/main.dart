@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_mesh_detection/google_mlkit_face_mesh_detection.dart';
 import 'package:camera/camera.dart';
 import 'dart:ui' as ui;
-import 'dart:math' as math;
 import 'package:flutter/services.dart';
 
 void main() async {
@@ -67,6 +66,8 @@ class _FaceMeshDetectionScreenState extends State<FaceMeshDetectionScreen> {
     setState(() {
       _isCameraInitialized = true;
     });
+
+    print('Camera Resolution: ${_cameraController?.value.previewSize}');
   }
 
   Future<void> _loadJewelryImages() async {
@@ -186,17 +187,15 @@ class _FaceMeshDetectionScreenState extends State<FaceMeshDetectionScreen> {
                     _earringsImage != null)
                   CustomPaint(
                     size: Size(
-                      _cameraController!.value.previewSize!.width,
-                      _cameraController!.value.previewSize!.height,
+                      MediaQuery.of(context).size.width,
+                      MediaQuery.of(context).size.height,
                     ),
                     painter: FaceMeshPainter(
                       _faceMeshes!,
                       _necklaceImage!,
                       _earringsImage!,
-                      Size(
-                        _cameraController!.value.previewSize!.width,
-                        _cameraController!.value.previewSize!.height,
-                      ),
+                      _cameraController!.value.previewSize!,
+                      MediaQuery.of(context).size,
                     ),
                     child: Container(),
                   ),
@@ -211,10 +210,11 @@ class FaceMeshPainter extends CustomPainter {
   final List<FaceMesh> faceMeshes;
   final ui.Image necklaceImage;
   final ui.Image earringsImage;
-  final Size previewSize;
+  final Size cameraPreviewSize;
+  final Size screenSize;
 
   FaceMeshPainter(this.faceMeshes, this.necklaceImage, this.earringsImage,
-      this.previewSize);
+      this.cameraPreviewSize, this.screenSize);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -228,31 +228,41 @@ class FaceMeshPainter extends CustomPainter {
       ..style = PaintingStyle.fill
       ..strokeWidth = 5;
 
-    double scaleX = size.width / previewSize.width;
-    double scaleY = size.height / previewSize.height;
+    // Scale factors to match camera preview with screen dimensions
+    double scaleX = size.width / cameraPreviewSize.width;
+    double scaleY = size.height / cameraPreviewSize.height;
 
-    double scale = math.min(scaleX, scaleY);
+    // Offset to center the preview on screen
+    double offsetX = 0;
+    double offsetY = 0;
 
-    double offsetX = (size.width - (previewSize.width * scale)) / 2;
-    double offsetY = (size.height - (previewSize.height * scale)) / 2;
+    if (scaleX > scaleY) {
+      // Wider aspect ratio
+      scaleX = scaleY;
+      offsetX = (size.width - (cameraPreviewSize.width * scaleX)) / 2;
+    } else {
+      // Taller aspect ratio
+      scaleY = scaleX;
+      offsetY = (size.height - (cameraPreviewSize.height * scaleY)) / 2;
+    }
 
     for (FaceMesh mesh in faceMeshes) {
+      // Draw bounding box
       final boundingBox = mesh.boundingBox;
-
-      // Debugging: Draw the bounding box of the detected face
       final scaledBox = Rect.fromLTRB(
-        (boundingBox.left * scale) + offsetX,
-        (boundingBox.top * scale) + offsetY,
-        (boundingBox.right * scale) + offsetX,
-        (boundingBox.bottom * scale) + offsetY,
+        (boundingBox.left * scaleX) + offsetX,
+        (boundingBox.top * scaleY) + offsetY,
+        (boundingBox.right * scaleX) + offsetX,
+        (boundingBox.bottom * scaleY) + offsetY,
       );
       canvas.drawRect(scaledBox, paint);
 
+      // Draw face mesh points
       for (var point in mesh.points) {
         canvas.drawCircle(
           Offset(
-            (point.x * scale) + offsetX,
-            (point.y * scale) + offsetY,
+            (point.x * scaleX) + offsetX,
+            (point.y * scaleY) + offsetY,
           ),
           3,
           pointPaint,
@@ -264,78 +274,105 @@ class FaceMeshPainter extends CustomPainter {
       final leftEarPoint = mesh.points[234];
       final rightEarPoint = mesh.points[454];
 
-      // Debug: Log the transformed coordinates
-      final scaledChinX = (chinPoint.x * scaleX) + offsetX;
-      final scaledChinY = (chinPoint.y * scaleY) + offsetY;
-      final scaledLeftEarX = (leftEarPoint.x * scaleX) + offsetX;
-      final scaledLeftEarY = (leftEarPoint.y * scaleY) + offsetY;
+      // Debugging: Verify alignment of key points
+      canvas.drawCircle(
+        Offset(
+          (chinPoint.x * scaleX) + offsetX,
+          (chinPoint.y * scaleY) + offsetY,
+        ),
+        6,
+        Paint()..color = Colors.green,
+      ); // Chin
 
-      print('Scaled Chin Point: x=$scaledChinX, y=$scaledChinY');
-      print('Scaled Left Ear Point: x=$scaledLeftEarX, y=$scaledLeftEarY');
+      canvas.drawCircle(
+        Offset(
+          (leftEarPoint.x * scaleX) + offsetX,
+          (leftEarPoint.y * scaleY) + offsetY,
+        ),
+        6,
+        Paint()..color = Colors.yellow,
+      ); // Left Ear
 
-      // Jewelry Placement using the bounding box
+      canvas.drawCircle(
+        Offset(
+          (rightEarPoint.x * scaleX) + offsetX,
+          (rightEarPoint.y * scaleY) + offsetY,
+        ),
+        6,
+        Paint()..color = Colors.purple,
+      ); // Right Ear
 
-      // Necklace Placement
-      final necklaceWidth = scaledBox.width * 0.9;
-      final necklaceHeight = necklaceWidth * 0.4;
-      final neckTopY = scaledBox.bottom + 10; // Just below the bounding box
-      final neckLeftX = scaledBox.center.dx - (necklaceWidth / 2);
-
-      final necklaceRect = Rect.fromLTWH(
-        neckLeftX,
-        neckTopY,
-        necklaceWidth,
-        necklaceHeight,
-      );
-
-      canvas.drawRect(necklaceRect, paint..color = Colors.green);
-
-      canvas.drawImageRect(
-        necklaceImage,
-        Offset.zero &
-            Size(necklaceImage.width.toDouble(),
-                necklaceImage.height.toDouble()),
-        necklaceRect,
-        Paint(),
-      );
-
-      // Earrings Placement
-      final earringSize = scaledBox.width * 0.2;
-
-      // Left Earring
-      final leftEarringRect = Rect.fromLTWH(
-        (leftEarPoint.x * scale) + offsetX - earringSize / 2,
-        (leftEarPoint.y * scale) + offsetY - earringSize / 2,
-        earringSize,
-        earringSize,
-      );
-      canvas.drawRect(leftEarringRect, paint..color = Colors.orange);
-      canvas.drawImageRect(
-        earringsImage,
-        Offset.zero &
-            Size(earringsImage.width.toDouble(),
-                earringsImage.height.toDouble()),
-        leftEarringRect,
-        Paint(),
-      );
-
-      // Right Earring
-      final rightEarringRect = Rect.fromLTWH(
-        (rightEarPoint.x * scale) + offsetX - earringSize / 2,
-        (rightEarPoint.y * scale) + offsetY - earringSize / 2,
-        earringSize,
-        earringSize,
-      );
-      canvas.drawRect(rightEarringRect, paint..color = Colors.orange);
-      canvas.drawImageRect(
-        earringsImage,
-        Offset.zero &
-            Size(earringsImage.width.toDouble(),
-                earringsImage.height.toDouble()),
-        rightEarringRect,
-        Paint(),
-      );
+      // Place jewelry (adjusted for scaling and offsets)
+      _drawJewelry(canvas, scaledBox, leftEarPoint, rightEarPoint, scaleX,
+          scaleY, offsetX, offsetY);
     }
+  }
+
+  void _drawJewelry(
+    Canvas canvas,
+    Rect scaledBox,
+    FaceMeshPoint leftEarPoint,
+    FaceMeshPoint rightEarPoint,
+    double scaleX,
+    double scaleY,
+    double offsetX,
+    double offsetY,
+  ) {
+    final paint = Paint();
+
+    // Necklace Placement
+    final necklaceWidth = scaledBox.width * 0.9;
+    final necklaceHeight = necklaceWidth * 0.4;
+    final neckTopY = scaledBox.bottom + 10; // Just below the bounding box
+    final neckLeftX = scaledBox.center.dx - (necklaceWidth / 2);
+
+    final necklaceRect = Rect.fromLTWH(
+      neckLeftX,
+      neckTopY,
+      necklaceWidth,
+      necklaceHeight,
+    );
+
+    canvas.drawImageRect(
+      necklaceImage,
+      Offset.zero &
+          Size(necklaceImage.width.toDouble(), necklaceImage.height.toDouble()),
+      necklaceRect,
+      paint,
+    );
+
+    // Earrings Placement
+    final earringSize = scaledBox.width * 0.2;
+
+    // Left Earring
+    final leftEarringRect = Rect.fromLTWH(
+      (leftEarPoint.x * scaleX) + offsetX - earringSize / 2,
+      (leftEarPoint.y * scaleY) + offsetY - earringSize / 2,
+      earringSize,
+      earringSize,
+    );
+    canvas.drawImageRect(
+      earringsImage,
+      Offset.zero &
+          Size(earringsImage.width.toDouble(), earringsImage.height.toDouble()),
+      leftEarringRect,
+      paint,
+    );
+
+    // Right Earring
+    final rightEarringRect = Rect.fromLTWH(
+      (rightEarPoint.x * scaleX) + offsetX - earringSize / 2,
+      (rightEarPoint.y * scaleY) + offsetY - earringSize / 2,
+      earringSize,
+      earringSize,
+    );
+    canvas.drawImageRect(
+      earringsImage,
+      Offset.zero &
+          Size(earringsImage.width.toDouble(), earringsImage.height.toDouble()),
+      rightEarringRect,
+      paint,
+    );
   }
 
   @override
